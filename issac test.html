@@ -64,6 +64,15 @@
     .btn.secondary{ background:#0b1022; color:var(--text); border:1px solid rgba(255,255,255,.12); box-shadow:none }
 
     .help{font-size:13px; color:#a5b4fc}
+
+    /* Context window vertical meter */
+    .ctx-meter{ position:fixed; right:18px; top:50%; transform:translateY(-50%); height:60vh; width:22px; display:flex; align-items:center; justify-content:center;}
+    .ctx-meter .track{ position:relative; height:100%; width:6px; border-radius:999px; background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06)); box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+    .ctx-meter .fill{ position:absolute; bottom:0; left:0; right:0; height:40%; background:linear-gradient(180deg, var(--accent), var(--accent-2)); border-radius:999px;}
+    .ctx-meter .handle{ position:absolute; left:50%; transform:translate(-50%, 50%); width:22px; height:22px; border-radius:50%; background:white; border:3px solid var(--accent); box-shadow:0 2px 5px rgba(0,0,0,.35); cursor:grab; touch-action:none }
+    .ctx-meter .handle:active{ cursor:grabbing }
+    .ctx-meter .label{ position:absolute; right:28px; white-space:nowrap; padding:6px 10px; border-radius:10px; background:#0b1022; color:var(--text); border:1px solid rgba(255,255,255,.08); font-size:12px; box-shadow:var(--shadow); pointer-events:none }
+
   </style>
 </head>
 <body>
@@ -151,12 +160,12 @@
       chips.forEach(chip => chip.addEventListener('click', () => setValue(chip.dataset.val)));
       reset.addEventListener('click', () => setValue(DEFAULT));
 
-      // Apply button is optional—fires a focused event if you prefer explicit apply semantics
       apply.addEventListener('click', () => {
-        const v = clamp(Number(number.value));
+        const v = current; // apply the canonical, clamped value
         setValue(v);
         window.dispatchEvent(new CustomEvent('contextwindow:apply', { detail: { tokens: v } }));
       });
+
 
       // Keep ARIA value text in sync for assistive tech
       const updateAria = () => {
@@ -167,7 +176,78 @@
       };
       updateAria();
       window.addEventListener('contextwindow:change', updateAria);
+    
+      // ===== Vertical Meter Logic =====
+const meter = document.querySelector('.ctx-meter');
+const track = meter.querySelector('.track');
+const fill = meter.querySelector('.fill');
+const handle = meter.querySelector('.handle');
+const meterLabel = meter.querySelector('#meterLabel');
+
+function pctFromValue(v){ return (v - MIN) / (MAX - MIN); }
+function valueFromPct(p){ return clamp(Math.round((MIN + p * (MAX - MIN)) / STEP) * STEP); }
+
+function renderMeter(v){
+  const p = pctFromValue(v);
+  const h = track.getBoundingClientRect().height;
+  const y = (1 - p) * h; // from top
+  fill.style.height = `${p * 100}%`;
+  handle.style.top = `${y}px`;
+  handle.setAttribute('aria-valuenow', String(v));
+  handle.setAttribute('aria-valuetext', `${v.toLocaleString()} tokens`);
+  meterLabel.textContent = v.toLocaleString() + ' tokens';
+  meterLabel.style.top = `calc(${y}px - 6px)`;
+}
+
+// Sync on init + whenever value changes
+renderMeter(current);
+window.addEventListener('contextwindow:change', (e) => renderMeter(e.detail.tokens));
+
+// Drag to adjust
+let dragging = false;
+function pointerPosToValue(clientY){
+  const rect = track.getBoundingClientRect();
+  let p = (rect.bottom - clientY) / rect.height; // 0..1 from bottom
+  p = Math.max(0, Math.min(1, p));
+  return valueFromPct(p);
+}
+const onPointerDown = (e) => { dragging = true; handle.setPointerCapture?.(e.pointerId); onPointerMove(e); };
+const onPointerMove = (e) => { if(!dragging) return; const v = pointerPosToValue(e.clientY); setValue(v); };
+const onPointerUp   = (e) => { if(!dragging) return; dragging = false; handle.releasePointerCapture?.(e.pointerId); window.dispatchEvent(new CustomEvent('contextwindow:apply', { detail: { tokens: current } })); };
+
+handle.addEventListener('pointerdown', onPointerDown);
+window.addEventListener('pointermove', onPointerMove);
+window.addEventListener('pointerup', onPointerUp);
+
+// Keyboard support
+handle.tabIndex = 0;
+handle.addEventListener('keydown', (e) => {
+  let v = current;
+  if(e.key === 'ArrowUp') v = clamp(current + STEP);
+  else if(e.key === 'ArrowDown') v = clamp(current - STEP);
+  else if(e.key === 'PageUp') v = clamp(current + STEP * 4);
+  else if(e.key === 'PageDown') v = clamp(current - STEP * 4);
+  else if(e.key === 'Home') v = MIN;
+  else if(e.key === 'End') v = MAX;
+  else return;
+  e.preventDefault();
+  setValue(v);
+  window.dispatchEvent(new CustomEvent('contextwindow:apply', { detail: { tokens: v } }));
+});
+
     })();
   </script>
+
+<!-- Vertical context window meter (draggable) -->
+<aside class="ctx-meter" aria-label="Context window size">
+  <div class="track" aria-hidden="true">
+    <div class="fill"></div>
+    <div class="handle" role="slider"
+         aria-orientation="vertical"
+         aria-valuemin="512" aria-valuemax="32768"
+         aria-valuenow="8192" aria-valuetext="8192 tokens"></div>
+    <div class="label" id="meterLabel">8,192 tokens</div>
+  </div>
+</aside>
 </body>
 </html>
