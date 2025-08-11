@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Context Window Controller</title>
+  <style>
+    :root{
+      --bg: #0f172a;      /* slate-900 */
+      --panel: #111827;   /* gray-900 */
+      --muted: #93c5fd;   /* blue-300 */
+      --text: #e5e7eb;    /* gray-200 */
+      --accent: #3b82f6;  /* blue-500 */
+      --accent-2: #60a5fa;/* blue-400 */
+      --ring: rgba(59,130,246,.5);
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    html,body{height:100%;}
+    body{
+      margin:0; background:linear-gradient(180deg,#0b1022 0%, #0c1229 100%);
+      color:var(--text); font:16px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      display:grid; place-items:center; padding:24px;
+    }
+    .card{
+      width:min(840px, 100%); background:var(--panel); border-radius:20px; box-shadow:var(--shadow);
+      padding:24px; border:1px solid rgba(255,255,255,.06)
+    }
+    h1{margin:0 0 8px; font-size:22px; letter-spacing:.2px}
+    p.hint{margin:0 0 18px; color:#cbd5e1; font-size:14px}
+
+    .row{display:flex; gap:18px; align-items:center; flex-wrap:wrap}
+
+    .value{font-variant-numeric: tabular-nums; background:#0b1022; padding:6px 10px; border-radius:10px; border:1px solid rgba(255,255,255,.06)}
+
+    .range-wrap{display:grid; gap:10px;}
+    input[type="range"]{
+      -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:999px;
+      background:linear-gradient(90deg,var(--accent),var(--accent-2)); outline:none
+    }
+    input[type="range"]::-webkit-slider-thumb{
+      -webkit-appearance:none; appearance:none; width:22px; height:22px; border-radius:50%; background:white; border:3px solid var(--accent);
+      box-shadow:0 1px 3px rgba(0,0,0,.3)
+    }
+    input[type="range"]::-moz-range-thumb{
+      width:22px; height:22px; border-radius:50%; background:white; border:3px solid var(--accent);
+      box-shadow:0 1px 3px rgba(0,0,0,.3)
+    }
+
+    .number{
+      width:130px; border-radius:12px; background:#0b1022; color:var(--text);
+      border:1px solid rgba(255,255,255,.08); padding:10px 12px; font-size:16px
+    }
+    .number:focus, input[type="range"]:focus{ outline: 3px solid var(--ring); outline-offset:2px }
+
+    .presets{ display:flex; gap:8px; flex-wrap:wrap }
+    .chip{ cursor:pointer; user-select:none; border:1px solid rgba(255,255,255,.08); padding:8px 10px; border-radius:999px; font-size:13px; opacity:.9 }
+    .chip.active{ border-color:var(--accent); box-shadow:0 0 0 2px rgba(59,130,246,.2) inset }
+
+    .row.bottom{ justify-content:space-between }
+    .btn{
+      border:0; border-radius:12px; padding:10px 14px; font-weight:600; cursor:pointer;
+      background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#0b1022; box-shadow:var(--shadow)
+    }
+    .btn.secondary{ background:#0b1022; color:var(--text); border:1px solid rgba(255,255,255,.12); box-shadow:none }
+
+    .help{font-size:13px; color:#a5b4fc}
+  </style>
+</head>
+<body>
+  <main class="card" role="group" aria-labelledby="ctx-label">
+    <h1 id="ctx-label">Context window</h1>
+    <p class="hint">Adjust the maximum tokens you want to allocate to the model's context window. This caps the space for prompt + history + tools + output.</p>
+
+    <div class="row" style="margin-bottom:12px">
+      <div class="value" aria-live="polite" id="liveValue">8192 tokens</div>
+      <span class="help">Saved automatically • Persisted per browser</span>
+    </div>
+
+    <div class="range-wrap" aria-describedby="ctx-desc">
+      <label for="ctxRange" class="sr-only" id="ctx-desc">Context window size (in tokens)</label>
+      <input id="ctxRange" type="range" min="512" max="32768" step="256" value="8192" />
+      <div class="row">
+        <input id="ctxNumber" class="number" type="number" min="512" max="32768" step="256" value="8192" inputmode="numeric" aria-label="Set exact tokens" />
+        <div class="presets" aria-label="Quick presets">
+          <div class="chip" data-val="4096">4k</div>
+          <div class="chip active" data-val="8192">8k</div>
+          <div class="chip" data-val="16384">16k</div>
+          <div class="chip" data-val="32768">32k</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row bottom" style="margin-top:18px">
+      <button id="resetBtn" class="btn secondary" type="button">Reset to default</button>
+      <button id="applyBtn" class="btn" type="button">Apply</button>
+    </div>
+  </main>
+
+  <script>
+    (function(){
+      const MIN = 512,
+            MAX = 32768,
+            STEP = 256,
+            DEFAULT = 8192,
+            KEY = 'contextWindowSizeTokens';
+
+      const range = document.getElementById('ctxRange');
+      const number = document.getElementById('ctxNumber');
+      const live = document.getElementById('liveValue');
+      const apply = document.getElementById('applyBtn');
+      const reset = document.getElementById('resetBtn');
+      const chips = Array.from(document.querySelectorAll('.chip'));
+
+      // Helpers
+      const clamp = v => Math.max(MIN, Math.min(MAX, v - (v % STEP)));
+      const fmt = v => `${v.toLocaleString()} tokens`;
+      const save = v => localStorage.setItem(KEY, String(v));
+      const load = () => clamp(parseInt(localStorage.getItem(KEY) || DEFAULT, 10));
+
+      let current = load();
+      function render(v){
+        range.value = String(v);
+        number.value = String(v);
+        live.textContent = fmt(v);
+        chips.forEach(c => c.classList.toggle('active', Number(c.dataset.val) === v));
+      }
+
+      function setValue(v, {silent=false}={}){
+        current = clamp(Number(v)||DEFAULT);
+        render(current);
+        save(current);
+        if(!silent){
+          // Broadcast to your app: listen for this to wire into your model/client
+          window.dispatchEvent(new CustomEvent('contextwindow:change', { detail: { tokens: current } }));
+          // Optional integration shim: call if present
+          if(typeof window.setContextWindowSize === 'function'){
+            try { window.setContextWindowSize(current); } catch(e) { /* noop */ }
+          }
+        }
+      }
+
+      // Initialize
+      render(current);
+      // Notify listeners on load (useful if you want eager sync)
+      window.dispatchEvent(new CustomEvent('contextwindow:ready', { detail: { tokens: current } }));
+
+      // UI bindings
+      range.addEventListener('input', e => setValue(e.target.value));
+      number.addEventListener('change', e => setValue(e.target.value));
+      number.addEventListener('input', e => render(clamp(e.target.value)));
+      chips.forEach(chip => chip.addEventListener('click', () => setValue(chip.dataset.val)));
+      reset.addEventListener('click', () => setValue(DEFAULT));
+
+      // Apply button is optional—fires a focused event if you prefer explicit apply semantics
+      apply.addEventListener('click', () => {
+        const v = clamp(Number(number.value));
+        setValue(v);
+        window.dispatchEvent(new CustomEvent('contextwindow:apply', { detail: { tokens: v } }));
+      });
+
+      // Keep ARIA value text in sync for assistive tech
+      const updateAria = () => {
+        range.setAttribute('aria-valuemin', String(MIN));
+        range.setAttribute('aria-valuemax', String(MAX));
+        range.setAttribute('aria-valuenow', String(current));
+        range.setAttribute('aria-valuetext', fmt(current));
+      };
+      updateAria();
+      window.addEventListener('contextwindow:change', updateAria);
+    })();
+  </script>
+</body>
+</html>
