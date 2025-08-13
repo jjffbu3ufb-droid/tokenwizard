@@ -3,40 +3,22 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Chat with ChatGPT</title>
+<title>Chat with ChatGPT — Auth Gated</title>
 <style>
-  :root{
-    --bg:#0b1020; --panel:#0e1530; --panel2:#1a1f3f;
-    --text:#e9ecf1; --muted:#b6bed3; --border:#333; --border2:#444; --accent:#4a7dff;
-  }
-  body{margin:0;font-family:sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-  h1{margin:16px 0}
+  body{margin:0;font-family:sans-serif;background:#0b1020;color:#e9ecf1;min-height:100vh}
   .wrap{max-width:900px;margin:auto;padding:16px;display:grid;grid-template-columns:300px 1fr;gap:12px}
   @media(max-width:800px){.wrap{grid-template-columns:1fr}}
-  label{display:block;margin-top:10px;font-size:12px;color:var(--muted)}
-  textarea,select,button,input{width:100%;border-radius:8px;border:1px solid var(--border2);background:var(--panel);color:var(--text);padding:10px}
+  label{display:block;margin-top:10px;font-size:12px;color:#b6bed3}
+  textarea,select,button,input{width:100%;border-radius:8px;border:1px solid #444;background:#0e1530;color:#e9ecf1;padding:10px}
   textarea{min-height:100px;resize:vertical}
-  .log{border:1px solid var(--border);border-radius:8px;padding:10px;max-height:60vh;overflow:auto;white-space:pre-wrap}
+  .log{border:1px solid #333;border-radius:8px;padding:10px;max-height:60vh;overflow:auto;white-space:pre-wrap}
   .msg{padding:8px;margin:6px 0;border-radius:8px}
   .user{background:#0f1a3f;align-self:flex-end}
-  .assistant{background:var(--panel2)}
-  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,0.03);font-size:12px}
-  .btn{cursor:pointer}
-  .btn-primary{background:var(--accent);border-color:var(--accent);color:white}
-  .btn-ghost{background:transparent;border-color:var(--border)}
-  .status{font-size:12px;color:var(--muted);margin-top:4px}
-  .hint{font-size:12px;color:var(--muted)}
-  .tag{display:inline-block;font-size:11px;padding:2px 8px;border:1px solid var(--border);border-radius:999px;margin-left:6px}
-
-  /* Modal */
-  .modal{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.5);z-index:50;padding:16px}
-  .modal.show{display:grid}
-  .card{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
-  .card h2{margin:0 0 8px;font-size:18px}
-  .card p{margin:0 0 12px;color:var(--muted);font-size:13px}
-  .card form{display:grid;gap:8px}
-  .sep{height:1px;background:var(--border);margin:10px 0}
+  .assistant{background:#1a1f3f}
+  .row{display:flex;gap:8px;align-items:center}
+  .pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#12204a;border:1px solid #243056;font-size:12px;color:#c8d1e7}
+  details{margin-top:8px}
+  summary{cursor:pointer;color:#c8d1e7}
 </style>
 </head>
 <body>
@@ -44,17 +26,26 @@
 
 <div class="wrap">
   <section>
-    <!-- Auth controls -->
-    <div class="row" style="justify-content:space-between;margin-bottom:6px">
-      <div class="pill">
-        <span id="authStatus">Guest (limited)</span>
-        <span id="limitTag" class="tag">1 free request</span>
+    <!-- AUTH UI -->
+    <div style="margin-bottom:14px">
+      <div class="row" style="justify-content:space-between;gap:12px">
+        <button id="googleBtn" type="button" style="flex:1">Sign in with Google</button>
+        <button id="signOutBtn" type="button" style="flex:0.6;display:none">Sign out</button>
       </div>
-      <div class="row">
-        <button id="signInBtn" class="btn btn-ghost">Sign in</button>
-        <button id="signUpBtn" class="btn btn-primary">Sign up</button>
-        <button id="signOutBtn" class="btn btn-ghost" style="display:none">Sign out</button>
-      </div>
+
+      <details id="emailBox">
+        <summary>Email sign in / create account</summary>
+        <div style="margin-top:8px;display:grid;gap:8px">
+          <input id="email" type="email" placeholder="email@example.com" autocomplete="email" />
+          <input id="password" type="password" placeholder="Password (min 6 chars)" autocomplete="current-password" />
+          <div class="row">
+            <button id="emailSignInBtn" type="button">Sign in</button>
+            <button id="emailCreateBtn" type="button">Create account</button>
+          </div>
+        </div>
+      </details>
+      <div id="authStatus" style="font-size:12px;color:#b6bed3;margin-top:6px"></div>
+      <div id="limitNote" class="pill" style="margin-top:6px"></div>
     </div>
 
     <label for="model">Model</label>
@@ -68,12 +59,11 @@
 
     <label for="user">Your message</label>
     <textarea id="user" placeholder="Ask me anything..."></textarea>
-    <div class="row">
-      <button id="sendBtn" class="btn btn-primary" style="margin-top:8px">Send</button>
-      <button id="clearBtn" class="btn btn-ghost" type="button" style="margin-top:8px">Clear</button>
-    </div>
-    <div id="status" class="status"></div>
-    <p class="hint" style="margin-top:6px">Note: Your API key is hardcoded in this demo, which is unsafe for public sites.</p>
+
+    <button id="sendBtn" style="margin-top:8px">Send</button>
+    <button id="clearBtn" type="button" style="margin-top:8px">Clear</button>
+    <div id="status" style="font-size:12px;color:#b6bed3;margin-top:4px"></div>
+    <div style="font-size:11px;color:#8391b3;margin-top:8px">⚠️ For production, move OpenAI calls to your server and never ship your API key in client code.</div>
   </section>
 
   <section>
@@ -81,175 +71,129 @@
   </section>
 </div>
 
-<!-- Auth Modal -->
-<div id="authModal" class="modal" aria-hidden="true">
-  <div class="card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-    <h2 id="authTitle">Sign in</h2>
-    <p id="authDesc">Access unlimited requests after signing in.</p>
-    <form id="authForm">
-      <input id="authEmail" type="email" placeholder="Email address" required />
-      <input id="authPass" type="password" placeholder="Password" required minlength="6" />
-      <button id="authSubmit" type="submit" class="btn btn-primary">Continue</button>
-      <button id="authCancel" type="button" class="btn btn-ghost">Cancel</button>
-      <div id="authError" class="status" style="color:#ff9f9f"></div>
-    </form>
-    <div class="sep"></div>
-    <div class="row" style="justify-content:space-between">
-      <span class="hint">New here?</span>
-      <button id="switchToSignUp" class="btn btn-ghost" type="button">Create an account</button>
-    </div>
-  </div>
-</div>
+<!-- Firebase Auth (v10) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  // Your Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyAKkLg2hB7JiCgwg6sW-58BX4LRkpiVTxo",
+    authDomain: "token-wizard.firebaseapp.com",
+    projectId: "token-wizard",
+    appId: "1:593641595767:web:933ac1eadc7ea285caf772"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const provider = new GoogleAuthProvider();
+
+  const $ = (id) => document.getElementById(id);
+  let isAuthenticated = false;
+  let sentRequests = 0; // per-page-load guest counter
+  const guestLimit = 1;
+
+  function updateAuthUI(user){
+    const statusEl = $("authStatus");
+    const limitEl = $("limitNote");
+
+    if(user){
+      isAuthenticated = true;
+      statusEl.textContent = `Signed in as ${user.email || user.displayName || "user"}. Unlimited messages unlocked.`;
+      $("signOutBtn").style.display = "";
+      $("googleBtn").style.display = "none";
+      $("emailBox").style.display = "none";
+      limitEl.textContent = "";
+      $("sendBtn").disabled = false;
+    }else{
+      isAuthenticated = false;
+      statusEl.textContent = "Guest mode: 1 free message. Sign in for unlimited.";
+      $("signOutBtn").style.display = "none";
+      $("googleBtn").style.display = "";
+      $("emailBox").style.display = "";
+      limitEl.textContent = `Remaining guest messages: ${Math.max(0, guestLimit - sentRequests)}`;
+      if(sentRequests >= guestLimit){ $("sendBtn").disabled = true; }
+    }
+  }
+
+  onAuthStateChanged(auth, (user) => updateAuthUI(user));
+
+  $("googleBtn").onclick = async () => {
+    try { await signInWithPopup(auth, provider); }
+    catch (e) { alert(e.message || e); }
+  };
+
+  $("signOutBtn").onclick = async () => {
+    try { await signOut(auth); sentRequests = 0; updateAuthUI(null); }
+    catch (e) { alert(e.message || e); }
+  };
+
+  $("emailSignInBtn").onclick = async () => {
+    const email = $("email").value.trim();
+    const password = $("password").value;
+    if(!email || !password){ alert("Enter email and password"); return; }
+    try { await signInWithEmailAndPassword(auth, email, password); }
+    catch (e) { alert(e.message || e); }
+  };
+
+  $("emailCreateBtn").onclick = async () => {
+    const email = $("email").value.trim();
+    const password = $("password").value;
+    if(!email || !password){ alert("Enter email and password"); return; }
+    try { await createUserWithEmailAndPassword(auth, email, password); }
+    catch (e) { alert(e.message || e); }
+  };
+
+  // Expose gating to the non-module script
+  window.__gating = {
+    get isAuthenticated(){ return isAuthenticated; },
+    get sentRequests(){ return sentRequests; },
+    inc(){ sentRequests++; updateAuthUI(auth.currentUser); },
+    get guestLimit(){ return guestLimit; }
+  };
+</script>
 
 <script>
-  // ⚠ Demo only: client-side “database” via localStorage (NOT secure).
-  // For production, implement server-side auth & storage.
-
-  // Hardcoded API key — unsafe for public sites
-  const API_KEY = "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";
+  // ⚠ Hardcoded API key — unsafe for public sites
+  const API_KEY = "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";
 
   const $ = id => document.getElementById(id);
   const history = [];
 
-  // --- “Database” helpers ---
-  function getUsers(){
-    try { return JSON.parse(localStorage.getItem('users')||'{}'); }
-    catch{ return {}; }
-  }
-  function setUsers(users){
-    localStorage.setItem('users', JSON.stringify(users));
-  }
-  function createUser(email, password){
-    const users = getUsers();
-    if(users[email]) return { ok:false, msg:'Account already exists.' };
-    users[email] = { email, password }; // ⚠ stores plain text (demo only)
-    setUsers(users);
-    return { ok:true };
-  }
-  function verifyUser(email, password){
-    const users = getUsers();
-    if(!users[email]) return { ok:false, msg:'No account found for this email.' };
-    if(users[email].password !== password) return { ok:false, msg:'Incorrect password.' };
-    return { ok:true };
-  }
-
-  // --- Auth state ---
-  function isSignedIn(){ return !!localStorage.getItem('currentUserEmail'); }
-  function currentUser(){ return localStorage.getItem('currentUserEmail'); }
-  function signIn(email){ localStorage.setItem('currentUserEmail', email); }
-  function signOut(){ localStorage.removeItem('currentUserEmail'); }
-
-  // Guest limit: allow exactly 1 request per browser session if not signed in
-  function guestRequestsUsed(){ return sessionStorage.getItem('guestUsed') === '1'; }
-  function markGuestUsed(){ sessionStorage.setItem('guestUsed', '1'); }
-
-  // --- UI helpers ---
   function addMessage(role, text){
     const div = document.createElement('div');
-    div.className = `msg ${role}`;
+    div.className = 'msg ' + role; // fixed className
     div.textContent = text;
     $("log").appendChild(div);
     $("log").scrollTop = $("log").scrollHeight;
   }
 
-  function updateAuthUI(){
-    if(isSignedIn()){
-      $("authStatus").textContent = `Signed in as ${currentUser()}`;
-      $("limitTag").style.display = "none";
-      $("signInBtn").style.display = "none";
-      $("signUpBtn").style.display = "none";
-      $("signOutBtn").style.display = "inline-block";
-    }else{
-      $("authStatus").textContent = "Guest (limited)";
-      $("limitTag").style.display = "inline-block";
-      $("signInBtn").style.display = "inline-block";
-      $("signUpBtn").style.display = "inline-block";
-      $("signOutBtn").style.display = "none";
-    }
-  }
-
-  function openModal(mode){ // mode: 'signin' | 'signup'
-    $("authModal").classList.add('show');
-    $("authModal").setAttribute('aria-hidden','false');
-    $("authError").textContent = '';
-    $("authEmail").value = '';
-    $("authPass").value = '';
-    if(mode === 'signup'){
-      $("authTitle").textContent = "Create account";
-      $("authDesc").textContent = "Sign up to unlock unlimited requests.";
-      $("authSubmit").textContent = "Sign up";
-      $("switchToSignUp").textContent = "Have an account? Sign in";
-      $("switchToSignUp").dataset.mode = "signin";
-      $("authForm").dataset.mode = "signup";
-    }else{
-      $("authTitle").textContent = "Sign in";
-      $("authDesc").textContent = "Access unlimited requests after signing in.";
-      $("authSubmit").textContent = "Sign in";
-      $("switchToSignUp").textContent = "Create an account";
-      $("switchToSignUp").dataset.mode = "signup";
-      $("authForm").dataset.mode = "signin";
-    }
-    setTimeout(()=>$("authEmail").focus(), 0);
-  }
-  function closeModal(){
-    $("authModal").classList.remove('show');
-    $("authModal").setAttribute('aria-hidden','true');
-  }
-
-  // --- Wire up basic UI ---
   $("clearBtn").onclick = () => {
     history.length = 0;
     $("log").innerHTML = '';
     $("status").textContent = '';
     $("user").value = '';
-  };
-
-  $("signInBtn").onclick = () => openModal('signin');
-  $("signUpBtn").onclick = () => openModal('signup');
-  $("signOutBtn").onclick = () => { signOut(); updateAuthUI(); addMessage('assistant','You have signed out. You are limited to 1 guest request per session.'); };
-
-  $("switchToSignUp").onclick = (e) => {
-    const mode = e.currentTarget.dataset.mode === 'signup' ? 'signup' : 'signin';
-    openModal(mode);
-  };
-  $("authCancel").onclick = closeModal;
-  $("authModal").addEventListener('click', (e)=>{ if(e.target === $("authModal")) closeModal(); });
-
-  $("authForm").onsubmit = (e) => {
-    e.preventDefault();
-    const email = $("authEmail").value.trim().toLowerCase();
-    const pass = $("authPass").value;
-    const mode = $("authForm").dataset.mode || 'signin';
-    if(!email || !pass){ $("authError").textContent = "Please fill in both fields."; return; }
-
-    if(mode === 'signup'){
-      const res = createUser(email, pass);
-      if(!res.ok){ $("authError").textContent = res.msg; return; }
-      signIn(email);
-      updateAuthUI();
-      closeModal();
-      addMessage('assistant', `🎉 Account created and signed in as ${email}. Enjoy unlimited requests!`);
-    }else{
-      const res = verifyUser(email, pass);
-      if(!res.ok){ $("authError").textContent = res.msg; return; }
-      signIn(email);
-      updateAuthUI();
-      closeModal();
-      addMessage('assistant', `✅ Signed in as ${email}. Unlimited requests enabled.`);
+    // Reset guest counter display
+    const gate = window.__gating;
+    if(!gate.isAuthenticated){
+      $("sendBtn").disabled = gate.sentRequests >= gate.guestLimit;
+      const note = document.getElementById('limitNote');
+      if(note) note.textContent = `Remaining guest messages: ${Math.max(0, gate.guestLimit - gate.sentRequests)}`;
     }
   };
 
-  // --- Send handling with limits ---
   $("sendBtn").onclick = async () => {
     const model = $("model").value.trim();
     const userMsg = $("user").value.trim();
     const sysMsg = $("system").value.trim();
+    const gate = window.__gating;
+
     if(!userMsg){ alert('Please write a message.'); return; }
 
-    // Enforce guest limit
-    if(!isSignedIn() && guestRequestsUsed()){
-      alert('Guest limit reached. Please sign in to continue using the chat without limits.');
-      openModal('signin');
+    // GATE: limit guests to 1 message
+    if(!gate.isAuthenticated && gate.sentRequests >= gate.guestLimit){
+      $("status").textContent = 'Guest limit reached — sign in for unlimited messages.';
+      alert('Guest limit reached — please sign in for unlimited use.');
       return;
     }
 
@@ -267,7 +211,7 @@
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`
+          'Authorization': 'Bearer ' + API_KEY // fixed header
         },
         body: JSON.stringify({ model, messages, temperature: 0.7 })
       });
@@ -279,24 +223,27 @@
       $("user").value = '';
       $("status").textContent = 'Done';
 
-      // After a successful send, if guest, mark usage
-      if(!isSignedIn()){
-        markGuestUsed();
-        $("limitTag").textContent = "Guest request used";
+      // Count guest messages only on success
+      if(!gate.isAuthenticated){
+        gate.inc();
+        const note = document.getElementById('limitNote');
+        if(note) note.textContent = `Remaining guest messages: ${Math.max(0, gate.guestLimit - gate.sentRequests)}`;
       }
     } catch (err){
       addMessage('assistant', '⚠️ Error: ' + (err.message || err));
       $("status").textContent = 'Failed';
     } finally {
-      $("sendBtn").disabled = false;
+      // Disable send button if guest limit reached
+      const gate2 = window.__gating;
+      if(!gate2.isAuthenticated && gate2.sentRequests >= gate2.guestLimit){
+        $("sendBtn").disabled = true;
+      } else {
+        $("sendBtn").disabled = false;
+      }
     }
   };
-
-  // Initialize
-  updateAuthUI();
-  if(guestRequestsUsed() && !isSignedIn()){
-    $("limitTag").textContent = "Guest request used";
-  }
 </script>
 </body>
 </html>
+
+
