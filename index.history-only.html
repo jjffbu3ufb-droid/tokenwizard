@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chat — History Budget + Real Usage (Patched Headers)</title>
+  <style>
+    :root { --bg: #0b1020; --card:#121830; --ink:#e9ecf1; --muted:#b6bed3; --accent:#7aa2ff; --ring: rgba(122,162,255,.35); }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background:linear-gradient(180deg,#0b1020,#0d1224 45%,#0a0f20); color:var(--ink); min-height:100vh; }
+    header { padding:28px 20px 10px; text-align:center; }
+    header h1 { margin:0 0 6px; font-size: clamp(20px,2.6vw,30px); letter-spacing:.3px; }
+    header p { margin:0; color:var(--muted); font-size:14px; }
+    .wrap { max-width:980px; margin:20px auto 40px; padding:0 16px; display:grid; grid-template-columns: 360px 1fr; gap:16px; }
+    @media (max-width: 900px){ .wrap{ grid-template-columns: 1fr; } }
+    .card { background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01)); border:1px solid rgba(255,255,255,.08); border-radius:18px; box-shadow: 0 8px 40px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.05); }
+    .panel { padding:16px; }
+    .label { display:block; font-size:12px; color:var(--muted); margin:10px 0 6px; }
+    .row { display:flex; gap:8px; align-items:center; }
+    input, select, textarea, button { width:100%; border-radius:12px; border:1px solid rgba(255,255,255,.15); background:#0e1530; color:var(--ink); padding:12px 12px; outline:none; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--ring); }
+    textarea { min-height:120px; resize:vertical; }
+    .hint { font-size:12px; color:var(--muted); margin-top:6px; }
+    .btn { cursor:pointer; background: linear-gradient(180deg, #2a5bff, #234be0); border: none; font-weight:600; letter-spacing:.2px; }
+    .btn[disabled] { opacity:.6; cursor:not-allowed; }
+    .log { padding:14px; max-height:60vh; overflow:auto; display:flex; flex-direction:column; gap:10px; }
+    .msg { padding:12px 14px; border-radius:14px; border:1px solid rgba(255,255,255,.08); background: #0e1530; white-space:pre-wrap; line-height:1.45; }
+    .user { align-self:flex-end; background:#0f1a3f; }
+    .assistant { align-self:flex-start; }
+    .sys { font-size:12px; color:var(--muted); }
+    footer { text-align:center; color:var(--muted); font-size:12px; padding:14px; }
+
+    .ctx-indicator {
+      position: fixed;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #0e1530;
+      border:1px solid rgba(255,255,255,.15);
+      box-shadow: 0 6px 28px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+      padding: 10px 12px;
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 50;
+      user-select: none;
+      min-width: 220px;
+    }
+    .ctx-indicator .line { display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--muted) }
+    .ctx-indicator .val { font-weight:700; color:var(--ink) }
+    .ctx-indicator .link { text-align:right; font-size:12px; }
+    .ctx-indicator a { color: var(--accent); text-decoration:none }
+    .ctx-indicator a:hover { text-decoration:underline }
+    .usage { font-size:12px; color:var(--muted); margin-top:6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Chat with ChatGPT (History Budget)</h1>
+    <p>Controls only how many tokens from <strong>past turns</strong> get sent. Shows <strong>actual usage</strong> returned by the API.</p>
+  </header>
+
+  <div id="ctxIndicator" class="ctx-indicator" role="status" aria-live="polite">
+    <div class="line"><span>History budget</span><span class="val" id="histVal">—</span></div>
+    <div class="link"><a id="wizardLink" href="token-wizard.history-only.html" title="Open token wizard">Adjust…</a></div>
+  </div>
+
+  <main class="wrap">
+    <section class="card panel" aria-labelledby="controls-title">
+      <h2 id="controls-title" class="sys" style="margin:4px 0 10px">Request settings</h2>
+      <label class="label" for="apiKey">OpenAI API key</label>
+      <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
+      <div class="hint">⚠️ Don’t ship keys in the browser for production.</div>
+
+      <label class="label" for="model">Model</label>
+      <select id="model">
+        <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
+        <option value="gpt-4o">gpt-4o</option>
+        <option value="gpt-5-mini">gpt-5-mini (if enabled)</option>
+        <option value="gpt-5-chat">gpt-5-chat (if enabled)</option>
+      </select>
+
+      <label class="label" for="system">System instructions (optional)</label>
+      <textarea id="system" placeholder="You are a concise, friendly assistant."></textarea>
+
+      <label class="label" for="user">Your message</label>
+      <textarea id="user" placeholder="Ask me anything..."></textarea>
+
+      <div class="row" style="margin-top:10px">
+        <button id="sendBtn" class="btn">Send</button>
+        <button id="clearBtn" type="button" title="Clear conversation">Clear</button>
+      </div>
+      <div class="hint" id="status"></div>
+      <div class="usage" id="usage"></div>
+    </section>
+
+    <section class="card panel" aria-labelledby="chat-title">
+      <h2 id="chat-title" class="sys" style="margin:4px 0 10px">Conversation</h2>
+      <div id="log" class="log" role="log" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer>© <span id="year"></span></footer>
+
+  <script>
+    const HISTORY_KEY = 'historyTokenBudget';
+    const DEF_HISTORY = 8192;
+
+    const formatNum = (n) => Number(n).toLocaleString();
+    function loadHistory(){ const n = Number(localStorage.getItem(HISTORY_KEY)); return Number.isFinite(n)&&n>0 ? n : DEF_HISTORY; }
+
+    // Indicator
+    const histValEl = document.getElementById('histVal');
+    function renderIndicator(){ histValEl.textContent = formatNum(loadHistory()) + ' tokens'; }
+    renderIndicator();
+    window.addEventListener('storage', (e) => { if(e.key === HISTORY_KEY) renderIndicator(); });
+
+    // ====== Chat app ======
+    const $ = id => document.getElementById(id);
+    const log = $("log");
+    const apiKeyEl = $("apiKey");
+    const modelEl = $("model");
+    const systemEl = $("system");
+    const userEl = $("user");
+    const sendBtn = $("sendBtn");
+    const clearBtn = $("clearBtn");
+    const statusEl = $("status");
+    const usageEl = $("usage");
+    $("year").textContent = new Date().getFullYear();
+
+    const history = []; // previous turns (we'll budget these), NOT including current input
+
+    function addMessage(role, text){
+      const div = document.createElement('div');
+      div.className = `msg ${role}`;
+      div.textContent = text;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+      return div;
+    }
+
+    clearBtn.addEventListener('click', () => {
+      history.length = 0;
+      log.innerHTML = '';
+      statusEl.textContent = '';
+      usageEl.textContent = '';
+      userEl.value = '';
+    });
+
+    // ==== Approx token helpers (for pre-send diagnostics) ====
+    function approxTokensFromText(str){ return Math.ceil((str || '').length / 4); }
+    function approxTokensOfMessages(msgs){
+      let total = 0;
+      for(const m of msgs){
+        if(Array.isArray(m.content)){
+          for(const part of m.content){
+            if(typeof part === 'string') total += approxTokensFromText(part);
+            else if(part && typeof part.text === 'string') total += approxTokensFromText(part.text);
+          }
+        }else{
+          total += approxTokensFromText(m.content);
+        }
+      }
+      return total;
+    }
+    // Trim *history only* to fit within historyBudget
+    function trimHistoryToBudget(historyMsgs, historyBudget){
+      const out = historyMsgs.slice();
+      while(approxTokensOfMessages(out) > historyBudget && out.length > 0){
+        out.shift(); // drop oldest turn
+      }
+      return out;
+    }
+
+    // Sanitize header values to ASCII-only (printable) to satisfy header constraints
+    function sanitizeForHeader(val){
+      if (typeof val !== 'string') return '';
+      // Normalize & strip anything outside printable ASCII (0x20-0x7E). Also collapse whitespace.
+      const clean = val.normalize('NFKC').replace(/[^\x20-\x7E]/g, '').replace(/\s+/g, ' ').trim();
+      return clean;
+    }
+
+    sendBtn.addEventListener('click', async () => {
+      const rawKey = apiKeyEl.value;
+      const apiKey = sanitizeForHeader(rawKey);
+      const model = modelEl.value.trim();
+      const userMsg = userEl.value.trim();
+      const sysMsg = systemEl.value.trim();
+      if(!apiKey){ alert('Please paste your OpenAI API key.'); return; }
+      if(!userMsg){ alert('Please write a message.'); return; }
+
+      // Warn if we had to clean the key
+      if (rawKey !== apiKey){
+        console.warn('API key contained non-ASCII or special whitespace and was sanitized before sending.');
+        statusEl.textContent = 'Note: your API key had special characters; sanitized for the request.';
+      }
+
+      const historyBudget = loadHistory();
+
+      // Build messages: [system?] + trimmedHistory + current user
+      const msgs = [];
+      if(sysMsg) msgs.push({ role: 'system', content: sysMsg }); // system is separate (not counted towards history budget)
+      const trimmedHistory = trimHistoryToBudget(history, historyBudget);
+      msgs.push(...trimmedHistory);
+      msgs.push({ role: 'user', content: userMsg });
+
+      // Diagnostics (approx before sending)
+      const histTokens = approxTokensOfMessages(trimmedHistory);
+      const currentTokens = approxTokensFromText(userMsg);
+      statusEl.textContent = `Approx → History ~${formatNum(histTokens)} / ${formatNum(historyBudget)} • Current ~${formatNum(currentTokens)}`;
+      usageEl.textContent = '';
+
+      // UI
+      addMessage('user', userMsg);
+      sendBtn.disabled = true;
+
+      try{
+        const headers = new Headers();
+        headers.set('Content-Type', 'application/json');
+        headers.set('Authorization', 'Bearer ' + apiKey);
+
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model,
+            messages: msgs,
+            temperature: 0.7
+          })
+        });
+        if(!res.ok){
+          const txt = await res.text();
+          throw new Error(`HTTP ${res.status}: ${txt}`);
+        }
+        const data = await res.json();
+        const reply = data.choices?.[0]?.message?.content?.trim() || '(no content)';
+        const aDiv = addMessage('assistant', reply);
+
+        // === Real usage from the API ===
+        const u = data.usage || {};
+        const p = u.prompt_tokens ?? null;
+        const c = u.completion_tokens ?? null;
+        const t = u.total_tokens ?? (p!=null && c!=null ? p + c : null);
+
+        // Show below the controls
+        if (p!=null || c!=null || t!=null){
+          usageEl.textContent = `Actual → Prompt ${p ?? '—'} • Completion ${c ?? '—'} • Total ${t ?? '—'}`;
+        } else {
+          usageEl.textContent = 'Actual → (usage not provided by API)';
+        }
+
+        // Also annotate the assistant bubble with a tiny footer
+        const meta = document.createElement('div');
+        meta.className = 'usage';
+        meta.textContent = (p!=null || c!=null || t!=null)
+          ? `Tokens ▸ prompt ${p ?? '—'} • completion ${c ?? '—'} • total ${t ?? '—'}`
+          : 'Tokens ▸ (usage not provided)';
+        aDiv.appendChild(meta);
+
+        history.push({ role: 'user', content: userMsg });
+        history.push({ role: 'assistant', content: reply });
+        userEl.value = '';
+        statusEl.textContent = `Sent ✓ Approx history ~${formatNum(histTokens)} / ${formatNum(historyBudget)}`;
+      } catch(err){
+        console.error(err);
+        addMessage('assistant', '⚠️ Error: ' + (err?.message || err));
+        statusEl.textContent = 'Failed';
+        usageEl.textContent = '';
+      } finally {
+        sendBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

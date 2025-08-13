@@ -73,10 +73,17 @@
     .ctx-meter .handle:active{ cursor:grabbing }
     .ctx-meter .label{ position:absolute; right:28px; white-space:nowrap; padding:6px 10px; border-radius:10px; background:#0b1022; color:var(--text); border:1px solid rgba(255,255,255,.08); font-size:12px; box-shadow:var(--shadow); pointer-events:none }
 
+  .settings-toggle{ position:absolute; top:12px; right:12px; padding:8px 10px; border:none; border-radius:999px; cursor:pointer; background:#0b1022; color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.12); }
+  .settings-toggle:focus{ outline:3px solid rgba(59,130,246,.5); outline-offset:2px }
+  .controls{ transition: transform .25s ease, opacity .25s ease; }
+  .controls.is-hidden{ transform: translateX(110%); opacity:0; pointer-events:none; }
+
   </style>
 </head>
 <body>
-  <main class="card" role="group" aria-labelledby="ctx-label">
+  <!-- Make the panel toggleable -->
+  <main id="settingsPanel" class="card controls" role="group" aria-labelledby="ctx-label">
+
     <h1 id="ctx-label">Context window</h1>
     <p class="hint">Adjust the maximum tokens you want to allocate to the model's context window. This caps the space for prompt + history + tools + output.</p>
 
@@ -105,7 +112,27 @@
     </div>
   </main>
 
-  <script>
+<!-- Vertical context window meter (draggable) -->
+<aside class="ctx-meter" aria-label="Context window size">
+  <div class="track" aria-hidden="true">
+    <div class="fill"></div>
+    <div class="handle" role="slider"
+         aria-orientation="vertical"
+         aria-valuemin="512" aria-valuemax="32768"
+         aria-valuenow="8192" aria-valuetext="8192 tokens"></div>
+    <div class="label" id="meterLabel">8,192 tokens</div>
+  </div>
+</aside>
+
+<div class="conversation-panel">
+  <div class="context-indicator" id="contextIndicator"></div>
+  <button id="settingsToggle" class="settings-toggle"
+          aria-expanded="true"
+          aria-controls="settingsPanel"
+          title="Hide settings">⚙️</button>
+</div>
+
+<script>
     (function(){
       const MIN = 512,
             MAX = 32768,
@@ -164,6 +191,8 @@
         const v = current; // apply the canonical, clamped value
         setValue(v);
         window.dispatchEvent(new CustomEvent('contextwindow:apply', { detail: { tokens: v } }));
+        // Go to the conversation page after saving
+        window.location.href = 'index.with-indicator.html';
       });
 
 
@@ -178,76 +207,95 @@
       window.addEventListener('contextwindow:change', updateAria);
     
       // ===== Vertical Meter Logic =====
-const meter = document.querySelector('.ctx-meter');
-const track = meter.querySelector('.track');
-const fill = meter.querySelector('.fill');
-const handle = meter.querySelector('.handle');
-const meterLabel = meter.querySelector('#meterLabel');
+      const meter = document.querySelector('.ctx-meter');
+      const track = meter.querySelector('.track');
+      const fill = meter.querySelector('.fill');
+      const handle = meter.querySelector('.handle');
+      const meterLabel = meter.querySelector('#meterLabel');
 
-function pctFromValue(v){ return (v - MIN) / (MAX - MIN); }
-function valueFromPct(p){ return clamp(Math.round((MIN + p * (MAX - MIN)) / STEP) * STEP); }
+      function pctFromValue(v){ return (v - MIN) / (MAX - MIN); }
+      function valueFromPct(p){ return clamp(Math.round((MIN + p * (MAX - MIN)) / STEP) * STEP); }
 
-function renderMeter(v){
-  const p = pctFromValue(v);
-  const h = track.getBoundingClientRect().height;
-  const y = (1 - p) * h; // from top
-  fill.style.height = `${p * 100}%`;
-  handle.style.top = `${y}px`;
-  handle.setAttribute('aria-valuenow', String(v));
-  handle.setAttribute('aria-valuetext', `${v.toLocaleString()} tokens`);
-  meterLabel.textContent = v.toLocaleString() + ' tokens';
-  meterLabel.style.top = `calc(${y}px - 6px)`;
-}
+      function renderMeter(v){
+        const p = pctFromValue(v);
+        const h = track.getBoundingClientRect().height;
+        const y = (1 - p) * h; // from top
+        fill.style.height = `${p * 100}%`;
+        handle.style.top = `${y}px`;
+        handle.setAttribute('aria-valuenow', String(v));
+        handle.setAttribute('aria-valuetext', `${v.toLocaleString()} tokens`);
+        meterLabel.textContent = v.toLocaleString() + ' tokens';
+        meterLabel.style.top = `calc(${y}px - 6px)`;
+      }
 
-// Sync on init + whenever value changes
-renderMeter(current);
-window.addEventListener('contextwindow:change', (e) => renderMeter(e.detail.tokens));
+      // Sync on init + whenever value changes
+      renderMeter(current);
+      window.addEventListener('contextwindow:change', (e) => renderMeter(e.detail.tokens));
 
-// Drag to adjust
-let dragging = false;
-function pointerPosToValue(clientY){
-  const rect = track.getBoundingClientRect();
-  let p = (rect.bottom - clientY) / rect.height; // 0..1 from bottom
-  p = Math.max(0, Math.min(1, p));
-  return valueFromPct(p);
-}
-const onPointerDown = (e) => { dragging = true; handle.setPointerCapture?.(e.pointerId); onPointerMove(e); };
-const onPointerMove = (e) => { if(!dragging) return; const v = pointerPosToValue(e.clientY); setValue(v); };
-const onPointerUp   = (e) => { if(!dragging) return; dragging = false; handle.releasePointerCapture?.(e.pointerId); window.dispatchEvent(new CustomEvent('contextwindow:apply', { detail: { tokens: current } })); };
+      // Drag to adjust
+      let dragging = false;
+      function pointerPosToValue(clientY){
+        const rect = track.getBoundingClientRect();
+        let p = (rect.bottom - clientY) / rect.height; // 0..1 from bottom
+        p = Math.max(0, Math.min(1, p));
+        return valueFromPct(p);
+      }
+      const onPointerDown = (e) => { dragging = true; handle.setPointerCapture?.(e.pointerId); onPointerMove(e); };
+      const onPointerMove = (e) => { if(!dragging) return; const v = pointerPosToValue(e.clientY); setValue(v); };
+      const onPointerUp   = (e) => { if(!dragging) return; dragging = false; handle.releasePointerCapture?.(e.pointerId); window.dispatchEvent(new CustomEvent('contextwindow:apply', { detail: { tokens: current } })); };
 
-handle.addEventListener('pointerdown', onPointerDown);
-window.addEventListener('pointermove', onPointerMove);
-window.addEventListener('pointerup', onPointerUp);
+      handle.addEventListener('pointerdown', onPointerDown);
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
 
-// Keyboard support
-handle.tabIndex = 0;
-handle.addEventListener('keydown', (e) => {
-  let v = current;
-  if(e.key === 'ArrowUp') v = clamp(current + STEP);
-  else if(e.key === 'ArrowDown') v = clamp(current - STEP);
-  else if(e.key === 'PageUp') v = clamp(current + STEP * 4);
-  else if(e.key === 'PageDown') v = clamp(current - STEP * 4);
-  else if(e.key === 'Home') v = MIN;
-  else if(e.key === 'End') v = MAX;
-  else return;
-  e.preventDefault();
-  setValue(v);
-  window.dispatchEvent(new CustomEvent('contextwindow:apply', { detail: { tokens: v } }));
-});
+      // Keyboard support
+      handle.tabIndex = 0;
+      handle.addEventListener('keydown', (e) => {
+        let v = current;
+        if(e.key === 'ArrowUp') v = clamp(current + STEP);
+        else if(e.key === 'ArrowDown') v = clamp(current - STEP);
+        else if(e.key === 'PageUp') v = clamp(current + STEP * 4);
+        else if(e.key === 'PageDown') v = clamp(current - STEP * 4);
+        else if(e.key === 'Home') v = MIN;
+        else if(e.key === 'End') v = MAX;
+        else return;
+        e.preventDefault();
+        setValue(v);
+        window.dispatchEvent(new CustomEvent('contextwindow:apply', { detail: { tokens: v } }));
+
+      });
+
+       // === Settings panel show/hide ===
+      const panel = document.getElementById('settingsPanel');
+      const toggleBtn = document.getElementById('settingsToggle');
+
+      function setPanelVisible(visible){
+        panel.classList.toggle('is-hidden', !visible);
+        toggleBtn?.setAttribute('aria-expanded', String(visible));
+        if(toggleBtn){ toggleBtn.title = visible ? 'Hide settings' : 'Show settings'; }
+      }
+      setPanelVisible(true);
+
+      toggleBtn?.addEventListener('click', () => {
+        const willShow = panel.classList.contains('is-hidden');
+        setPanelVisible(willShow);
+      });
+
+      // Close on Apply or meter "apply"
+      apply.addEventListener('click', () => setPanelVisible(false));
+      window.addEventListener('contextwindow:apply', () => setPanelVisible(false));
+
+      // Close on Escape
+      window.addEventListener('keydown', (e) => { if(e.key==='Escape') setPanelVisible(false); });
+
+      // Click outside to close
+      document.addEventListener('click', (e) => {
+        const withinPanel = panel.contains(e.target);
+        const onToggle = toggleBtn && toggleBtn.contains(e.target);
+        if(!withinPanel && !onToggle) setPanelVisible(false);
+      });
 
     })();
-  </script>
-
-<!-- Vertical context window meter (draggable) -->
-<aside class="ctx-meter" aria-label="Context window size">
-  <div class="track" aria-hidden="true">
-    <div class="fill"></div>
-    <div class="handle" role="slider"
-         aria-orientation="vertical"
-         aria-valuemin="512" aria-valuemax="32768"
-         aria-valuenow="8192" aria-valuetext="8192 tokens"></div>
-    <div class="label" id="meterLabel">8,192 tokens</div>
-  </div>
-</aside>
+</script>
 </body>
 </html>

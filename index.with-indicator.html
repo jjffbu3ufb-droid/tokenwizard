@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chat with ChatGPT (OpenAI API)</title>
+  <style>
+    :root {
+      --bg: #0b1020; --card:#121830; --ink:#e9ecf1; --muted:#b6bed3; --accent:#7aa2ff;
+      --ring: rgba(122,162,255,.35);
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji"; background:linear-gradient(180deg,#0b1020,#0d1224 45%,#0a0f20); color:var(--ink); min-height:100vh; }
+    header { padding:28px 20px 10px; text-align:center; }
+    header h1 { margin:0 0 6px; font-size: clamp(20px,2.6vw,30px); letter-spacing:.3px; }
+    header p { margin:0; color:var(--muted); font-size:14px; }
+
+    .wrap { max-width:980px; margin:20px auto 40px; padding:0 16px; display:grid; grid-template-columns: 360px 1fr; gap:16px; }
+    @media (max-width: 900px){ .wrap{ grid-template-columns: 1fr; } }
+
+    .card { background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01)); border:1px solid rgba(255,255,255,.08); border-radius:18px; box-shadow: 0 8px 40px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.05); }
+    .panel { padding:16px; }
+    .label { display:block; font-size:12px; color:var(--muted); margin:10px 0 6px; }
+    .row { display:flex; gap:8px; align-items:center; }
+    input, select, textarea, button { width:100%; border-radius:12px; border:1px solid rgba(255,255,255,.15); background:#0e1530; color:var(--ink); padding:12px 12px; outline:none; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--ring); }
+    textarea { min-height:120px; resize:vertical; }
+    .hint { font-size:12px; color:var(--muted); margin-top:6px; }
+    .btn { cursor:pointer; background: linear-gradient(180deg, #2a5bff, #234be0); border: none; font-weight:600; letter-spacing:.2px; }
+    .btn[disabled] { opacity:.6; cursor:not-allowed; }
+
+    .log { padding:14px; max-height:60vh; overflow:auto; display:flex; flex-direction:column; gap:10px; }
+    .msg { padding:12px 14px; border-radius:14px; border:1px solid rgba(255,255,255,.08); background: #0e1530; white-space:pre-wrap; line-height:1.45; }
+    .user { align-self:flex-end; background:#0f1a3f; }
+    .assistant { align-self:flex-start; }
+    .sys { font-size:12px; color:var(--muted); }
+
+    footer { text-align:center; color:var(--muted); font-size:12px; padding:14px; }
+    .pill { display:inline-block; padding:6px 10px; background:#0e1530; border:1px solid rgba(255,255,255,.1); border-radius:999px; }
+
+    /* --- Context indicator on the side --- */
+    .ctx-indicator {
+      position: fixed;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #0e1530;
+      border:1px solid rgba(255,255,255,.15);
+      box-shadow: 0 6px 28px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+      padding: 10px 12px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 50;
+      user-select: none;
+    }
+    .ctx-indicator .dot {
+      width:10px; height:10px; border-radius:999px; background: var(--accent);
+      box-shadow: 0 0 0 6px var(--ring);
+    }
+    .ctx-indicator .text {
+      font-size: 12px; color: var(--muted);
+    }
+    .ctx-indicator .value {
+      font-weight: 700; letter-spacing: .2px; color: var(--ink);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Chat with ChatGPT via the OpenAI API</h1>
+    <p>Enter your API key (not stored), pick a model, and send a prompt. The reply appears on the right.</p>
+  </header>
+
+  <!-- Floating context window indicator -->
+  <div id="ctxIndicator" class="ctx-indicator" role="status" aria-live="polite" title="Click to adjust in the token wizard">
+    <div class="dot" aria-hidden="true"></div>
+    <div class="text">Context:&nbsp;<span class="value" id="ctxIndicatorValue">—</span></div>
+  </div>
+
+  <main class="wrap">
+    <!-- LEFT: Controls -->
+    <section class="card panel" aria-labelledby="controls-title">
+      <h2 id="controls-title" class="sys" style="margin:4px 0 10px">Request settings</h2>
+
+      <label class="label" for="apiKey">OpenAI API key</label>
+      <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
+      <div class="hint">⚠️ For production, route requests through your backend. Don’t ship keys in the browser.</div>
+
+      <label class="label" for="model">Model</label>
+      <select id="model">
+        <option value="gpt-4o-mini" selected>gpt-4o-mini (fast & cost‑efficient)</option>
+        <option value="gpt-4o">gpt-4o</option>
+        <option value="gpt-5-mini">gpt-5-mini (if enabled)</option>
+        <option value="gpt-5-chat">gpt-5-chat (if enabled)</option>
+      </select>
+
+      <label class="label" for="system">System instructions (optional)</label>
+      <textarea id="system" placeholder="You are a concise, friendly assistant."></textarea>
+
+      <label class="label" for="user">Your message</label>
+      <textarea id="user" placeholder="Ask me anything..."></textarea>
+
+      <div class="row" style="margin-top:10px">
+        <button id="sendBtn" class="btn">Send to ChatGPT</button>
+        <button id="clearBtn" type="button" title="Clear conversation">Clear</button>
+      </div>
+      <div class="hint" id="status"></div>
+
+      <div class="hint" style="margin-top:10px">
+        <span class="pill">Tip</span>
+        You can tweak <code>temperature</code> and other params in the code below.
+      </div>
+    </section>
+
+    <!-- RIGHT: Chat log -->
+    <section class="card panel" aria-labelledby="chat-title">
+      <h2 id="chat-title" class="sys" style="margin:4px 0 10px">Conversation</h2>
+      <div id="log" class="log" role="log" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer>
+    Built for demo purposes. © <span id="year"></span>
+  </footer>
+
+  <script>
+    // ====== Context window (shared with wizard via localStorage) ======
+    const CTX_KEY = 'contextWindowSizeTokens';
+    const CTX_DEFAULT = 8192;
+    const MIN_REPLY_RESERVE = 512; // leave this many tokens for the model's reply
+
+    function loadCtxSize(){
+      const raw = Number(localStorage.getItem(CTX_KEY));
+      return Number.isFinite(raw) && raw > 0 ? raw : CTX_DEFAULT;
+    }
+    function formatNum(n){ return n.toLocaleString(); }
+
+    // Render floating indicator and click behavior
+    const ctxIndicator = document.getElementById('ctxIndicator');
+    const ctxIndicatorValue = document.getElementById('ctxIndicatorValue');
+    function renderCtxIndicator(val){
+      ctxIndicatorValue.textContent = formatNum(val) + ' tokens';
+    }
+    function getWizardUrl(){
+      // assumes the wizard filename used earlier; adjust if different
+      const base = location.href.replace(/index(?:\.with-indicator)?\.html.*$/,''); 
+      return base + 'issac%20test.html';
+    }
+    ctxIndicator.addEventListener('click', () => {
+      // Open wizard to adjust value
+      location.href = getWizardUrl();
+    });
+
+    // Keep indicator in sync if user changes it in another tab
+    window.addEventListener('storage', (e) => {
+      if(e.key === CTX_KEY){
+        renderCtxIndicator(loadCtxSize());
+      }
+    });
+
+    // ====== Page UI refs ======
+    const $ = (id) => document.getElementById(id);
+    const log = $("log");
+    const apiKeyEl = $("apiKey");
+    const modelEl = $("model");
+    const systemEl = $("system");
+    const userEl = $("user");
+    const sendBtn = $("sendBtn");
+    const clearBtn = $("clearBtn");
+    const statusEl = $("status");
+    $("year").textContent = new Date().getFullYear();
+
+    const history = []; // simple in-memory history for this tab
+
+    function addMessage(role, text){
+      const div = document.createElement('div');
+      div.className = `msg ${role}`;
+      div.textContent = text;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    clearBtn.addEventListener('click', () => {
+      history.length = 0;
+      log.innerHTML = '';
+      statusEl.textContent = '';
+      userEl.value = '';
+    });
+
+    // ====== Approx token helpers (very rough) ======
+    function approxTokensFromText(str){
+      // super simple heuristic: ~4 characters per token
+      return Math.ceil((str || '').length / 4);
+    }
+    function approxTokensOfMessages(msgs){
+      let total = 0;
+      for(const m of msgs){
+        if(Array.isArray(m.content)){
+          for(const part of m.content){
+            if(typeof part === 'string') total += approxTokensFromText(part);
+            else if(part && typeof part.text === 'string') total += approxTokensFromText(part.text);
+          }
+        }else{
+          total += approxTokensFromText(m.content);
+        }
+      }
+      return total;
+    }
+    function trimMessagesToContext(msgs, ctxSize, reserve){
+      const keepSystem = msgs.length && msgs[0].role === 'system' ? 1 : 0;
+      const out = msgs.slice();
+      // Remove oldest non-system messages until we fit
+      while(approxTokensOfMessages(out) > (ctxSize - reserve) && out.length > keepSystem + 2){
+        out.splice(keepSystem, 1);
+      }
+      return out;
+    }
+
+    // ====== Initial render of indicator from saved value ======
+    let ctxSize = loadCtxSize();
+    renderCtxIndicator(ctxSize);
+
+    // If we arrived here right after pressing Apply in the wizard, highlight the badge briefly
+    if (document.referrer && /issac%20test\.html/.test(document.referrer)) {
+      ctxIndicator.style.boxShadow = '0 0 0 8px var(--ring)';
+      setTimeout(() => ctxIndicator.style.boxShadow = '', 1200);
+    }
+
+    sendBtn.addEventListener('click', async () => {
+      const apiKey = apiKeyEl.value.trim();
+      const model = modelEl.value.trim();
+      const userMsg = userEl.value.trim();
+      const sysMsg = systemEl.value.trim();
+
+      if(!apiKey){ alert('Please paste your OpenAI API key.'); return; }
+      if(!userMsg){ alert('Please write a message.'); return; }
+
+      // Reload ctx in case it changed
+      ctxSize = loadCtxSize();
+      renderCtxIndicator(ctxSize);
+
+      // reflect in UI
+      sendBtn.disabled = true;
+      statusEl.textContent = 'Sending... Using context ' + formatNum(ctxSize) + ' tokens.';
+      addMessage('user', userMsg);
+
+      // build chat messages array
+      const base = [];
+      if(sysMsg) base.push({ role: 'system', content: sysMsg });
+      for(const m of history){ base.push(m); }
+      base.push({ role: 'user', content: userMsg });
+
+      // Trim to fit approx context
+      const reserve = Math.max(MIN_REPLY_RESERVE, Math.floor(ctxSize * 0.1));
+      const messages = trimMessagesToContext(base, ctxSize, reserve);
+      const used = approxTokensOfMessages(messages);
+      const maxTokens = Math.max(128, Math.min(16384, ctxSize - used - Math.floor(reserve/2)));
+
+      statusEl.textContent = `Sending... Context ${formatNum(ctxSize)}; input ~${formatNum(used)} tokens; max output ~${formatNum(maxTokens)}.`;
+
+      try {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: 0.7,
+            max_tokens: maxTokens
+          })
+        });
+
+        if(!res.ok){
+          const errText = await res.text();
+          throw new Error(`HTTP ${res.status}: ${errText}`);
+        }
+        const data = await res.json();
+        const reply = data.choices?.[0]?.message?.content?.trim() || '(no content)';
+
+        addMessage('assistant', reply);
+        history.push({ role: 'user', content: userMsg });
+        history.push({ role: 'assistant', content: reply });
+        userEl.value = '';
+        statusEl.textContent = `Done. Context ${formatNum(ctxSize)}; input ~${formatNum(used)}; output used ≤ ${formatNum(maxTokens)}.`;
+      } catch (err){
+        console.error(err);
+        addMessage('assistant', '⚠️ Error: ' + (err?.message || err));
+        statusEl.textContent = 'Failed';
+      } finally {
+        sendBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
