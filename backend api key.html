@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Chat with ChatGPT</title>
+<style>
+  body{margin:0;font-family:sans-serif;background:#0b1020;color:#e9ecf1;min-height:100vh}
+  .wrap{max-width:900px;margin:auto;padding:16px;display:grid;grid-template-columns:300px 1fr;gap:12px}
+  @media(max-width:800px){.wrap{grid-template-columns:1fr}}
+  label{display:block;margin-top:10px;font-size:12px;color:#b6bed3}
+  textarea,select,button{width:100%;border-radius:8px;border:1px solid #444;background:#0e1530;color:#e9ecf1;padding:10px}
+  textarea{min-height:100px;resize:vertical}
+  .log{border:1px solid #333;border-radius:8px;padding:10px;max-height:60vh;overflow:auto;white-space:pre-wrap}
+  .msg{padding:8px;margin:6px 0;border-radius:8px}
+  .user{background:#0f1a3f;align-self:flex-end}
+  .assistant{background:#1a1f3f}
+</style>
+</head>
+<body>
+<h1 style="text-align:center">Chat with ChatGPT</h1>
+
+<div class="wrap">
+  <section>
+    <label for="model">Model</label>
+    <select id="model">
+      <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
+      <option value="gpt-4o">gpt-4o</option>
+    </select>
+
+    <label for="system">System instructions (optional)</label>
+    <textarea id="system" placeholder="You are a concise, friendly assistant."></textarea>
+
+    <label for="user">Your message</label>
+    <textarea id="user" placeholder="Ask me anything..."></textarea>
+
+    <button id="sendBtn" style="margin-top:8px">Send</button>
+    <button id="clearBtn" type="button" style="margin-top:8px">Clear</button>
+    <div id="status" style="font-size:12px;color:#b6bed3;margin-top:4px"></div>
+  </section>
+
+  <section>
+    <div id="log" class="log"></div>
+  </section>
+</div>
+
+<script>
+  // ⚠ Hardcoded API key — unsafe for public sites
+  const API_KEY = "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";
+
+  const $ = id => document.getElementById(id);
+  const history = [];
+
+  function addMessage(role, text){
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+    div.textContent = text;
+    $("log").appendChild(div);
+    $("log").scrollTop = $("log").scrollHeight;
+  }
+
+  $("clearBtn").onclick = () => {
+    history.length = 0;
+    $("log").innerHTML = '';
+    $("status").textContent = '';
+    $("user").value = '';
+  };
+
+  $("sendBtn").onclick = async () => {
+    const model = $("model").value.trim();
+    const userMsg = $("user").value.trim();
+    const sysMsg = $("system").value.trim();
+    if(!userMsg){ alert('Please write a message.'); return; }
+
+    $("sendBtn").disabled = true;
+    $("status").textContent = 'Sending...';
+    addMessage('user', userMsg);
+
+    const messages = [];
+    if(sysMsg) messages.push({ role: 'system', content: sysMsg });
+    for(const m of history) messages.push(m);
+    messages.push({ role: 'user', content: userMsg });
+
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`
+        },
+        body: JSON.stringify({ model, messages, temperature: 0.7 })
+      });
+      if(!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content?.trim() || '(no content)';
+      addMessage('assistant', reply);
+      history.push({ role: 'user', content: userMsg }, { role: 'assistant', content: reply });
+      $("user").value = '';
+      $("status").textContent = 'Done';
+    } catch (err){
+      addMessage('assistant', '⚠️ Error: ' + (err.message || err));
+      $("status").textContent = 'Failed';
+    } finally {
+      $("sendBtn").disabled = false;
+    }
+  };
+</script>
+</body>
+</html>
