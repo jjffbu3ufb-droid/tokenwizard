@@ -1,302 +1,168 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Chat with ChatGPT</title>
+<html>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>LLMLingua Chat</title>
 <style>
-  :root{
-    --bg:#0b1020; --panel:#0e1530; --panel2:#1a1f3f;
-    --text:#e9ecf1; --muted:#b6bed3; --border:#333; --border2:#444; --accent:#4a7dff;
-  }
-  body{margin:0;font-family:sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-  h1{margin:16px 0}
-  .wrap{max-width:900px;margin:auto;padding:16px;display:grid;grid-template-columns:300px 1fr;gap:12px}
-  @media(max-width:800px){.wrap{grid-template-columns:1fr}}
-  label{display:block;margin-top:10px;font-size:12px;color:var(--muted)}
-  textarea,select,button,input{width:100%;border-radius:8px;border:1px solid var(--border2);background:var(--panel);color:var(--text);padding:10px}
-  textarea{min-height:100px;resize:vertical}
-  .log{border:1px solid var(--border);border-radius:8px;padding:10px;max-height:60vh;overflow:auto;white-space:pre-wrap}
-  .msg{padding:8px;margin:6px 0;border-radius:8px}
-  .user{background:#0f1a3f;align-self:flex-end}
-  .assistant{background:var(--panel2)}
-  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,0.03);font-size:12px}
-  .btn{cursor:pointer}
-  .btn-primary{background:var(--accent);border-color:var(--accent);color:white}
-  .btn-ghost{background:transparent;border-color:var(--border)}
-  .status{font-size:12px;color:var(--muted);margin-top:4px}
-  .hint{font-size:12px;color:var(--muted)}
-  .tag{display:inline-block;font-size:11px;padding:2px 8px;border:1px solid var(--border);border-radius:999px;margin-left:6px}
-
-  /* Modal */
-  .modal{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.5);z-index:50;padding:16px}
-  .modal.show{display:grid}
-  .card{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
-  .card h2{margin:0 0 8px;font-size:18px}
-  .card p{margin:0 0 12px;color:var(--muted);font-size:13px}
-  .card form{display:grid;gap:8px}
-  .sep{height:1px;background:var(--border);margin:10px 0}
+body{font-family:sans-serif;background:#0b1020;color:#e9ecf1;margin:0}
+.wrap{max-width:980px;margin:auto;padding:16px;display:grid;grid-template-columns:320px 1fr;gap:12px}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+textarea,select,button,input{width:100%;border-radius:8px;border:1px solid #444;background:#0e1530;color:#e9ecf1;padding:10px}
+textarea{min-height:100px;resize:vertical}
+.log{border:1px solid #333;border-radius:8px;padding:10px;max-height:60vh;overflow:auto;white-space:pre-wrap}
+.msg{padding:8px;margin:6px 0;border-radius:8px}
+.user{background:#0f1a3f}
+.assistant{background:#1a1f3f}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #333;border-radius:999px;background:rgba(255,255,255,0.03);font-size:12px}
+.btn{cursor:pointer}
+.btn-primary{background:#4a7dff;border-color:#4a7dff;color:white}
+.hint{font-size:12px;color:#b6bed3}
+details{border:1px solid #333;border-radius:8px;padding:8px;background:#0e1530}
+details[open]{box-shadow:0 0 0 2px rgba(74,125,255,.2) inset}
+summary{cursor:pointer;list-style:none}
+summary::-webkit-details-marker{display:none}
+kbd{background:#1a1f3f;border:1px solid #333;border-radius:4px;padding:0 6px;font-size:12px}
+.copy{font-size:12px;border-radius:6px;border:1px solid #333;background:#162045;color:#e9ecf1;padding:4px 8px;cursor:pointer}
+.copy:active{transform:scale(0.98)}
 </style>
-</head>
 <body>
-<h1 style="text-align:center">Chat with ChatGPT</h1>
-
+<h1 style="text-align:center;margin:16px 0">Chat (with LLMLingua)</h1>
 <div class="wrap">
   <section>
-    <!-- Auth controls -->
-    <div class="row" style="justify-content:space-between;margin-bottom:6px">
-      <div class="pill">
-        <span id="authStatus">Guest (limited)</span>
-        <span id="limitTag" class="tag">1 free request</span>
-      </div>
-      <div class="row">
-        <button id="signInBtn" class="btn btn-ghost">Sign in</button>
-        <button id="signUpBtn" class="btn btn-primary">Sign up</button>
-        <button id="signOutBtn" class="btn btn-ghost" style="display:none">Sign out</button>
-      </div>
-    </div>
-
-    <label for="model">Model</label>
+    <label>Model</label>
     <select id="model">
-      <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
+      <option value="gpt-4o-mini">gpt-4o-mini</option>
       <option value="gpt-4o">gpt-4o</option>
     </select>
 
-    <label for="system">System instructions (optional)</label>
+    <label>System instructions (optional)</label>
     <textarea id="system" placeholder="You are a concise, friendly assistant."></textarea>
 
-    <label for="user">Your message</label>
+    <label>Your message</label>
     <textarea id="user" placeholder="Ask me anything..."></textarea>
+
+    <div class="row" style="margin-top:8px">
+      <label class="pill"><input type="checkbox" id="useCompression" checked/> Enable LLMLingua</label>
+      <label class="pill">Rate <input id="rate" type="number" step="0.05" min="0.1" max="1.0" value="0.5" style="width:80px"/></label>
+      <label class="pill">Min chars <input id="minChars" type="number" step="50" min="0" value="400" style="width:90px"/></label>
+    </div>
+
+    <div class="row" style="margin-top:6px">
+      <label class="pill" title="When on, the server returns the compressed text"><input type="checkbox" id="showCompressed"/> Show compressed prompt</label>
+    </div>
+
     <div class="row">
       <button id="sendBtn" class="btn btn-primary" style="margin-top:8px">Send</button>
-      <button id="clearBtn" class="btn btn-ghost" type="button" style="margin-top:8px">Clear</button>
+      <button id="clearBtn" class="btn" type="button" style="margin-top:8px">Clear</button>
     </div>
-    <div id="status" class="status"></div>
-    <p class="hint" style="margin-top:6px">Note: Your API key is hardcoded in this demo, which is unsafe for public sites.</p>
+    <div id="status" class="hint" style="margin-top:6px"></div>
+    <p class="hint">Your API key stays on the server. This page calls <code>/api/chat</code>.</p>
   </section>
 
   <section>
-    <div id="log" class="log"></div>
+    <div id="log" class="log" aria-live="polite"></div>
+
+    <details id="compressedBox" style="margin-top:10px" hidden>
+      <summary><strong>Compressed prompt</strong> <span id="ratioTag" class="hint"></span></summary>
+      <div class="row" style="justify-content:flex-end;margin:6px 0">
+        <button id="copyBtn" class="copy" type="button">Copy</button>
+      </div>
+      <pre id="compressedText" style="white-space:pre-wrap;"></pre>
+    </details>
   </section>
 </div>
 
-<!-- Auth Modal -->
-<div id="authModal" class="modal" aria-hidden="true">
-  <div class="card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-    <h2 id="authTitle">Sign in</h2>
-    <p id="authDesc">Access unlimited requests after signing in.</p>
-    <form id="authForm">
-      <input id="authEmail" type="email" placeholder="Email address" required />
-      <input id="authPass" type="password" placeholder="Password" required minlength="6" />
-      <button id="authSubmit" type="submit" class="btn btn-primary">Continue</button>
-      <button id="authCancel" type="button" class="btn btn-ghost">Cancel</button>
-      <div id="authError" class="status" style="color:#ff9f9f"></div>
-    </form>
-    <div class="sep"></div>
-    <div class="row" style="justify-content:space-between">
-      <span class="hint">New here?</span>
-      <button id="switchToSignUp" class="btn btn-ghost" type="button">Create an account</button>
-    </div>
-  </div>
-</div>
-
 <script>
-  // ⚠ Demo only: client-side “database” via localStorage (NOT secure).
-  // For production, implement server-side auth & storage.
-
-  // Hardcoded API key — unsafe for public sites
-  const API_KEY = "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";
-
-  const $ = id => document.getElementById(id);
-  const history = [];
-
-  // --- “Database” helpers ---
-  function getUsers(){
-    try { return JSON.parse(localStorage.getItem('users')||'{}'); }
-    catch{ return {}; }
+const historyMsgs = [];
+function addMessage(role, text){
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  document.getElementById('log').appendChild(div);
+  document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+}
+function setCompressedUI(visible, text, info){
+  const box = document.getElementById('compressedBox');
+  const pre = document.getElementById('compressedText');
+  const ratioTag = document.getElementById('ratioTag');
+  if(!visible){
+    box.hidden = true;
+    pre.textContent = '';
+    ratioTag.textContent = '';
+    return;
   }
-  function setUsers(users){
-    localStorage.setItem('users', JSON.stringify(users));
-  }
-  function createUser(email, password){
-    const users = getUsers();
-    if(users[email]) return { ok:false, msg:'Account already exists.' };
-    users[email] = { email, password }; // ⚠ stores plain text (demo only)
-    setUsers(users);
-    return { ok:true };
-  }
-  function verifyUser(email, password){
-    const users = getUsers();
-    if(!users[email]) return { ok:false, msg:'No account found for this email.' };
-    if(users[email].password !== password) return { ok:false, msg:'Incorrect password.' };
-    return { ok:true };
-  }
+  pre.textContent = text || '(empty)';
+  ratioTag.textContent = info ? '• ' + info : '';
+  box.hidden = false;
+}
 
-  // --- Auth state ---
-  function isSignedIn(){ return !!localStorage.getItem('currentUserEmail'); }
-  function currentUser(){ return localStorage.getItem('currentUserEmail'); }
-  function signIn(email){ localStorage.setItem('currentUserEmail', email); }
-  function signOut(){ localStorage.removeItem('currentUserEmail'); }
+document.getElementById('clearBtn').onclick = () => {
+  historyMsgs.length = 0;
+  document.getElementById('log').innerHTML='';
+  document.getElementById('status').textContent='';
+  document.getElementById('user').value='';
+  setCompressedUI(false);
+};
 
-  // Guest limit: allow exactly 1 request per browser session if not signed in
-  function guestRequestsUsed(){ return sessionStorage.getItem('guestUsed') === '1'; }
-  function markGuestUsed(){ sessionStorage.setItem('guestUsed', '1'); }
+document.getElementById('copyBtn').onclick = async () => {
+  const text = document.getElementById('compressedText').textContent;
+  try{
+    await navigator.clipboard.writeText(text);
+    document.getElementById('copyBtn').textContent = 'Copied';
+    setTimeout(()=>document.getElementById('copyBtn').textContent='Copy', 1000);
+  }catch{}
+};
 
-  // --- UI helpers ---
-  function addMessage(role, text){
-    const div = document.createElement('div');
-    div.className = `msg ${role}`;
-    div.textContent = text;
-    $("log").appendChild(div);
-    $("log").scrollTop = $("log").scrollHeight;
-  }
+document.getElementById('sendBtn').onclick = async () => {
+  const model = document.getElementById('model').value.trim();
+  const sysMsg = document.getElementById('system').value.trim();
+  const userMsg = document.getElementById('user').value.trim();
+  const useCompression = document.getElementById('useCompression').checked;
+  const rate = parseFloat(document.getElementById('rate').value || '0.5');
+  const minChars = parseInt(document.getElementById('minChars').value || '400', 10);
+  const debug = document.getElementById('showCompressed').checked;
 
-  function updateAuthUI(){
-    if(isSignedIn()){
-      $("authStatus").textContent = `Signed in as ${currentUser()}`;
-      $("limitTag").style.display = "none";
-      $("signInBtn").style.display = "none";
-      $("signUpBtn").style.display = "none";
-      $("signOutBtn").style.display = "inline-block";
+  if(!userMsg){ alert('Please write a message.'); return; }
+
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('status').textContent = 'Sending...';
+  addMessage('user', userMsg);
+
+  const messages = [];
+  if(sysMsg) messages.push({ role: 'system', content: sysMsg });
+  for(const m of historyMsgs) messages.push(m);
+  messages.push({ role: 'user', content: userMsg });
+
+  try{
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages, compress: useCompression, rate, min_chars: minChars, debug })
+    });
+    if(!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const reply = data.reply || '(no content)';
+    addMessage('assistant', reply);
+    historyMsgs.push({ role: 'user', content: userMsg }, { role: 'assistant', content: reply });
+    document.getElementById('user').value='';
+    const info = data.compressed ? ('Compressed: ' + (data.compression_info||'')) : 'Not compressed';
+    document.getElementById('status').textContent = info;
+
+    // Show compressed prompt if requested and available
+    if (debug && data.compressed && data.compressed_prompt){
+      setCompressedUI(true, data.compressed_prompt, data.compression_info||'');
     }else{
-      $("authStatus").textContent = "Guest (limited)";
-      $("limitTag").style.display = "inline-block";
-      $("signInBtn").style.display = "inline-block";
-      $("signUpBtn").style.display = "inline-block";
-      $("signOutBtn").style.display = "none";
+      setCompressedUI(false);
     }
+  }catch(err){
+    addMessage('assistant', '⚠️ ' + (err.message || err));
+    document.getElementById('status').textContent = 'Failed';
+    setCompressedUI(false);
+  }finally{
+    document.getElementById('sendBtn').disabled = false;
   }
-
-  function openModal(mode){ // mode: 'signin' | 'signup'
-    $("authModal").classList.add('show');
-    $("authModal").setAttribute('aria-hidden','false');
-    $("authError").textContent = '';
-    $("authEmail").value = '';
-    $("authPass").value = '';
-    if(mode === 'signup'){
-      $("authTitle").textContent = "Create account";
-      $("authDesc").textContent = "Sign up to unlock unlimited requests.";
-      $("authSubmit").textContent = "Sign up";
-      $("switchToSignUp").textContent = "Have an account? Sign in";
-      $("switchToSignUp").dataset.mode = "signin";
-      $("authForm").dataset.mode = "signup";
-    }else{
-      $("authTitle").textContent = "Sign in";
-      $("authDesc").textContent = "Access unlimited requests after signing in.";
-      $("authSubmit").textContent = "Sign in";
-      $("switchToSignUp").textContent = "Create an account";
-      $("switchToSignUp").dataset.mode = "signup";
-      $("authForm").dataset.mode = "signin";
-    }
-    setTimeout(()=>$("authEmail").focus(), 0);
-  }
-  function closeModal(){
-    $("authModal").classList.remove('show');
-    $("authModal").setAttribute('aria-hidden','true');
-  }
-
-  // --- Wire up basic UI ---
-  $("clearBtn").onclick = () => {
-    history.length = 0;
-    $("log").innerHTML = '';
-    $("status").textContent = '';
-    $("user").value = '';
-  };
-
-  $("signInBtn").onclick = () => openModal('signin');
-  $("signUpBtn").onclick = () => openModal('signup');
-  $("signOutBtn").onclick = () => { signOut(); updateAuthUI(); addMessage('assistant','You have signed out. You are limited to 1 guest request per session.'); };
-
-  $("switchToSignUp").onclick = (e) => {
-    const mode = e.currentTarget.dataset.mode === 'signup' ? 'signup' : 'signin';
-    openModal(mode);
-  };
-  $("authCancel").onclick = closeModal;
-  $("authModal").addEventListener('click', (e)=>{ if(e.target === $("authModal")) closeModal(); });
-
-  $("authForm").onsubmit = (e) => {
-    e.preventDefault();
-    const email = $("authEmail").value.trim().toLowerCase();
-    const pass = $("authPass").value;
-    const mode = $("authForm").dataset.mode || 'signin';
-    if(!email || !pass){ $("authError").textContent = "Please fill in both fields."; return; }
-
-    if(mode === 'signup'){
-      const res = createUser(email, pass);
-      if(!res.ok){ $("authError").textContent = res.msg; return; }
-      signIn(email);
-      updateAuthUI();
-      closeModal();
-      addMessage('assistant', `🎉 Account created and signed in as ${email}. Enjoy unlimited requests!`);
-    }else{
-      const res = verifyUser(email, pass);
-      if(!res.ok){ $("authError").textContent = res.msg; return; }
-      signIn(email);
-      updateAuthUI();
-      closeModal();
-      addMessage('assistant', `✅ Signed in as ${email}. Unlimited requests enabled.`);
-    }
-  };
-
-  // --- Send handling with limits ---
-  $("sendBtn").onclick = async () => {
-    const model = $("model").value.trim();
-    const userMsg = $("user").value.trim();
-    const sysMsg = $("system").value.trim();
-    if(!userMsg){ alert('Please write a message.'); return; }
-
-    // Enforce guest limit
-    if(!isSignedIn() && guestRequestsUsed()){
-      alert('Guest limit reached. Please sign in to continue using the chat without limits.');
-      openModal('signin');
-      return;
-    }
-
-    $("sendBtn").disabled = true;
-    $("status").textContent = 'Sending...';
-    addMessage('user', userMsg);
-
-    const messages = [];
-    if(sysMsg) messages.push({ role: 'system', content: sysMsg });
-    for(const m of history) messages.push(m);
-    messages.push({ role: 'user', content: userMsg });
-
-    try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`
-        },
-        body: JSON.stringify({ model, messages, temperature: 0.7 })
-      });
-      if(!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      const reply = data.choices?.[0]?.message?.content?.trim() || '(no content)';
-      addMessage('assistant', reply);
-      history.push({ role: 'user', content: userMsg }, { role: 'assistant', content: reply });
-      $("user").value = '';
-      $("status").textContent = 'Done';
-
-      // After a successful send, if guest, mark usage
-      if(!isSignedIn()){
-        markGuestUsed();
-        $("limitTag").textContent = "Guest request used";
-      }
-    } catch (err){
-      addMessage('assistant', '⚠️ Error: ' + (err.message || err));
-      $("status").textContent = 'Failed';
-    } finally {
-      $("sendBtn").disabled = false;
-    }
-  };
-
-  // Initialize
-  updateAuthUI();
-  if(guestRequestsUsed() && !isSignedIn()){
-    $("limitTag").textContent = "Guest request used";
-  }
+};
 </script>
 </body>
 </html>
